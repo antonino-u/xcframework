@@ -9,7 +9,8 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/AlwaysRightInstitute/Shell", from: "0.1.4"),
-        .package(url: "https://github.com/Carthage/Commandant", from: "0.17.0")
+        .package(url: "https://github.com/Carthage/Commandant", from: "0.17.0"),
+        .package(url: "https://github.com/JohnSundell/Files", from: "4.0.0"),
     ],
     targets: [
         .target(
@@ -17,7 +18,7 @@ let package = Package(
             dependencies: ["XCFrameworkKit", "Commandant"]),
         .target(
             name: "XCFrameworkKit",
-            dependencies: ["Shell"]),
+            dependencies: ["Shell", "Files"]),
         .testTarget(
             name: "XCFrameworkKitTests",
             dependencies: ["XCFrameworkKit"]),

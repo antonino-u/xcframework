@@ -29,17 +29,18 @@ struct BuildCommand: CommandProtocol {
         let tvOSScheme: String?
         let macOSScheme: String?
         let verbose: Bool
+        let keepArchives: Bool
         let compilerArguments: [String]
         
-        static func create(_ project: String?) -> (String?) -> (String) -> (String) -> (String?) -> (String?) -> (String?) -> (String?) -> (Bool) -> ([String]) -> Options {
-            return { name in { outputDirectory in { buildDirectory in { iOSScheme in { watchOSScheme in { tvOSScheme in { macOSScheme in { verbose in { compilerArguments in Options(project: project, name: name, outputDirectory: outputDirectory, buildDirectory: buildDirectory, iOSScheme: iOSScheme, watchOSScheme: watchOSScheme, tvOSScheme: tvOSScheme, macOSScheme: macOSScheme, verbose: verbose, compilerArguments: compilerArguments) } } } } } } } } }
+        static func create(_ project: String?) -> (String?) -> (String) -> (String) -> (String?) -> (String?) -> (String?) -> (String?) -> (Bool) -> (Bool) -> ([String]) -> Options {
+            return { name in { outputDirectory in { buildDirectory in { iOSScheme in { watchOSScheme in { tvOSScheme in { macOSScheme in { verbose in { keepArchives in { compilerArguments in Options(project: project, name: name, outputDirectory: outputDirectory, buildDirectory: buildDirectory, iOSScheme: iOSScheme, watchOSScheme: watchOSScheme, tvOSScheme: tvOSScheme, macOSScheme: macOSScheme, verbose: verbose, keepArchives: keepArchives, compilerArguments: compilerArguments) } } } } } } } } } }
         }
         
         static func evaluate(_ mode: CommandMode) -> Result<Options, CommandantError<CommandantError<()>>> {
             let defaultBuildDirectory = "/tmp/xcframework/build/"
             return create
                 <*> mode <| Option(key: "project", defaultValue: nil, usage: "REQUIRED: the path and project to build")
-                <*> mode <| Option(key: "name", defaultValue: nil, usage: "REQUIRED: the framework name, Example: <name>.framework")
+                <*> mode <| Option(key: "name", defaultValue: nil, usage: "The framework name, Example: <name>.xcframework. Required if more than one scheme is provided.")
                 <*> mode <| Option(key: "output", defaultValue: FileManager.default.currentDirectoryPath, usage: "the output directory (default: .)")
                 <*> mode <| Option(key: "build", defaultValue: FileManager.default.currentDirectoryPath.appending(defaultBuildDirectory), usage: "build directory (default: \(defaultBuildDirectory)")
                 <*> mode <| Option(key: "ios", defaultValue: nil, usage: "the scheme for your iOS target")
@@ -47,6 +48,7 @@ struct BuildCommand: CommandProtocol {
                 <*> mode <| Option(key: "tvos", defaultValue: nil, usage: "the scheme for your tvOS target")
                 <*> mode <| Option(key: "macos", defaultValue: nil, usage: "the scheme for your macOS target")
                 <*> mode <| Switch(key: "verbose", usage: "enable verbose logs")
+                <*> mode <| Switch(key: "keepArchives", usage: "keeps the generated archives")
                 <*> mode <| Argument(defaultValue: [], usage: "any extra xcodebuild arguments to be used in the framework archiving")
         }
     }
@@ -63,6 +65,7 @@ struct BuildCommand: CommandProtocol {
             builder.macOSScheme = options.macOSScheme
             builder.verbose = options.verbose
             builder.compilerArguments = options.compilerArguments
+            builder.keepArchives = options.keepArchives
         }
         let result = builder.build()
         switch result {

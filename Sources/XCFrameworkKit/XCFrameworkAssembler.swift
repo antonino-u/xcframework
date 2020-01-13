@@ -7,24 +7,13 @@
 
 import Foundation
 import Shell
+import Files
 
 public struct XCFrameworkAssembler {
 
     public var name: String?
     public var outputDirectory: String?
     public var frameworkPaths: [String]?
-
-    private struct Framework {
-        
-        let path: String
-        let name: String
-        let archs: [String]
-        let temporary: Bool
-        
-        var binaryPath: String {
-            path+"/"+name
-        }
-    }
     
     private func frameworks(from paths: [String]) -> Result<[Framework], XCFrameworkAssemblerError> {
         
@@ -45,7 +34,7 @@ public struct XCFrameworkAssembler {
                     .first?
                     .split(separator: " ")
                     .compactMap({ String.init($0) }) {
-                    frameworks.append(XCFrameworkAssembler.Framework(path: path, name: String(binaryName), archs: archs, temporary: false))
+                    frameworks.append(Framework(path: path, name: String(binaryName), archs: archs, temporary: false))
                 }
             }
         }
@@ -111,7 +100,7 @@ public struct XCFrameworkAssembler {
                 
         let finalOutputDirectory = outputDirectory.hasSuffix("/") ? outputDirectory : outputDirectory + "/"
         let finalOutput = finalOutputDirectory + name + ".xcframework"
-        shell.bin.rm("-r",finalOutput)
+        try? Folder(path: finalOutput).delete()
         
         //duplicate the frameworks per-architecture and then create an xcframework from them
         var thinnedFrameworks = [Framework]()
@@ -123,10 +112,11 @@ public struct XCFrameworkAssembler {
                 for arch in framework.archs {
                     let thinnedFrameworkPath = "\(framework.path)/../\(framework.name)_\(arch).framework"
                     let thinnedFramework = Framework(path: thinnedFrameworkPath, name: framework.name, archs: [arch], temporary: true)
-                    shell.bin.rm("-r",thinnedFramework.path)
-                    let copyResult = shell.bin.cp("-R", framework.path, thinnedFramework.path)
-                    if !copyResult.isSuccess {
-                        return Result.failure(.other(copyResult.stderr))
+                    try? Folder(path: thinnedFramework.path).delete()
+                    do {
+                        try Folder(path: framework.path).copy(to: Folder(path: thinnedFramework.path))
+                    } catch let error {
+                        return Result.failure(.other(error.localizedDescription))
                     }
                     let thinnedResult = shell.usr.bin.xcrun.dynamicallyCall(withArguments: ["lipo", thinnedFramework.binaryPath, "-thin", arch, "-output", thinnedFramework.binaryPath])
                     if !thinnedResult.isSuccess {
@@ -155,7 +145,7 @@ public struct XCFrameworkAssembler {
         print("Cleaning up...")
         for thinnedFramework in thinnedFrameworks {
             if thinnedFramework.temporary {
-                shell.bin.rm("-r",thinnedFramework.path)
+                try? Folder(path: thinnedFramework.path).delete()
             }
         }
 
