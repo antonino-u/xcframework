@@ -64,7 +64,7 @@ public class XCFrameworkBuilder {
         configure(self)
     }
     
-    public func build() -> Result<(),XCFrameworkError> {
+    public func build() -> Result<[Archive],XCFrameworkError> {
                 
         guard let project = project else {
             return .failure(XCFrameworkError.projectNotFound)
@@ -178,7 +178,7 @@ public class XCFrameworkBuilder {
             try? Folder(path: buildDirectory).delete()
         }
         
-        return .success(())
+        return .success(archives)
     }
     
     private func buildScheme(scheme: String, sdk: SDK, project: String, buildPath: String) throws -> Archive {
