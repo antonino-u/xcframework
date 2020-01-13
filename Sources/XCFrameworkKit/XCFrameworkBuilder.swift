@@ -58,6 +58,8 @@ public class XCFrameworkBuilder {
         case tvOSSim = "appletvsimulator"
     }
     
+    public static let archiveInstallPath = "All"
+    
     public init(configure: (XCFrameworkBuilder) -> ()) {
         configure(self)
     }
@@ -184,7 +186,7 @@ public class XCFrameworkBuilder {
         let archivePath = buildPath + "\(scheme)-\(sdk.rawValue).xcarchive"
         //array of arguments for the archive of each framework
         //weird interpolation errors are forcing me to use this "" + syntax.  not sure if this is a compiler bug or not.
-        var archiveArguments = ["-project", "\"" + project + "\"", "-scheme", "\"" + scheme + "\"", "archive", "SKIP_INSTALL=NO", "BUILD_LIBRARY_FOR_DISTRIBUTION=YES"]
+        var archiveArguments = ["-project", "\"" + project + "\"", "-scheme", "\"" + scheme + "\"", "archive", "SKIP_INSTALL=NO", "BUILD_LIBRARY_FOR_DISTRIBUTION=YES", "INSTALL_PATH=\"\(XCFrameworkBuilder.archiveInstallPath)\""]
         if let compilerArguments = compilerArguments {
             archiveArguments.append(contentsOf: compilerArguments)
         }
@@ -199,7 +201,7 @@ public class XCFrameworkBuilder {
         }
         
         var frameworks = [Framework]()
-        let generatedFrameworksPath = archivePath + "/Products/Library/Frameworks/"
+        let generatedFrameworksPath = archivePath + "/" + XCFrameworkBuilder.archiveInstallPath
         do {
             let generatedFrameworksFolder = try Folder(path: generatedFrameworksPath)
             for subfolder in generatedFrameworksFolder.subfolders {
