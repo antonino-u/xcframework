@@ -7,6 +7,7 @@
 
 import Foundation
 import Shell
+import Files
 
 public class XCFrameworkBuilder {
     public var name: String?
@@ -18,10 +19,11 @@ public class XCFrameworkBuilder {
     public var tvOSScheme: String?
     public var macOSScheme: String?
     public var verbose: Bool = false
+    public var keepArchives: Bool = false
     public var compilerArguments: [String]?
     
     public enum XCFrameworkError: Error {
-        case nameNotFound
+        case name
         case projectNotFound
         case noSchemesFound
         case buildDirectoryNotFound
@@ -30,8 +32,8 @@ public class XCFrameworkBuilder {
         
         public var description: String {
             switch self {
-            case .nameNotFound:
-                return "No name parameter found."
+            case .name:
+                return "Name is required when more than one scheme is provided."
             case .projectNotFound:
                 return "No project parameter found."
             case .noSchemesFound:
@@ -61,19 +63,11 @@ public class XCFrameworkBuilder {
     }
     
     public func build() -> Result<(),XCFrameworkError> {
-        
-        guard let name = name else {
-            return .failure(XCFrameworkError.nameNotFound)
-        }
-        
+                
         guard let project = project else {
             return .failure(XCFrameworkError.projectNotFound)
         }
-        
-        guard watchOSScheme != nil || iOSScheme != nil || macOSScheme != nil || tvOSScheme != nil else {
-            return .failure(XCFrameworkError.noSchemesFound)
-        }
-        
+                
         guard let outputDirectory = outputDirectory else {
             return .failure(XCFrameworkError.outputDirectoryNotFound)
         }
@@ -82,38 +76,44 @@ public class XCFrameworkBuilder {
             return .failure(XCFrameworkError.buildDirectoryNotFound)
         }
         
-        print("Creating \(name)...")
+        //if there are multiple schemes, then the name parameter is required. Otherwise, use the one specified scheme.
+        let schemes = [watchOSScheme, iOSScheme, macOSScheme, tvOSScheme].compactMap({$0})
+        if schemes.count == 0 {
+            return .failure(XCFrameworkError.noSchemesFound)
+        } else if schemes.count > 1 && self.name == nil {
+            return .failure(XCFrameworkError.name)
+        }
+        let name = self.name ?? schemes[0]
+
+        print("Building schemes...")
         
         //final build location
         let finalBuildDirectory = buildDirectory.hasSuffix("/") ? buildDirectory : buildDirectory + "/"
         
         //final xcframework location
         let finalOutputDirectory = outputDirectory.hasSuffix("/") ? outputDirectory : outputDirectory + "/"
-        let finalOutput = finalOutputDirectory + name + ".xcframework"
         
-        shell.usr.rm(finalOutput)
-        //array of arguments for the final xcframework construction
-        var frameworksArguments = ["-create-xcframework"]
+        var allFrameworks = [Framework]()
         
         //try all supported SDKs
         do {
             if let watchOSScheme = watchOSScheme {
-                try frameworksArguments.append(contentsOf: buildScheme(scheme: watchOSScheme, sdk: .watchOS, project: project, name: name, buildPath: finalBuildDirectory))
-                try frameworksArguments.append(contentsOf: buildScheme(scheme: watchOSScheme, sdk: .watchOSSim, project: project, name: name, buildPath: finalBuildDirectory))
+                try allFrameworks.append(contentsOf: buildScheme(scheme: watchOSScheme, sdk: .watchOS, project: project, buildPath: finalBuildDirectory))
+                try allFrameworks.append(contentsOf: buildScheme(scheme: watchOSScheme, sdk: .watchOSSim, project: project, buildPath: finalBuildDirectory))
             }
             
             if let iOSScheme = iOSScheme {
-                try frameworksArguments.append(contentsOf: buildScheme(scheme: iOSScheme, sdk: .iOS, project: project, name: name, buildPath: finalBuildDirectory))
-                try frameworksArguments.append(contentsOf: buildScheme(scheme: iOSScheme, sdk: .iOSSim, project: project, name: name, buildPath: finalBuildDirectory))
+                try allFrameworks.append(contentsOf: buildScheme(scheme: iOSScheme, sdk: .iOS, project: project, buildPath: finalBuildDirectory))
+                try allFrameworks.append(contentsOf: buildScheme(scheme: iOSScheme, sdk: .iOSSim, project: project, buildPath: finalBuildDirectory))
             }
             
             if let tvOSScheme = tvOSScheme {
-                try frameworksArguments.append(contentsOf: buildScheme(scheme: tvOSScheme, sdk: .tvOS, project: project, name: name, buildPath: finalBuildDirectory))
-                try frameworksArguments.append(contentsOf: buildScheme(scheme: tvOSScheme, sdk: .tvOSSim, project: project, name: name, buildPath: finalBuildDirectory))
+                try allFrameworks.append(contentsOf: buildScheme(scheme: tvOSScheme, sdk: .tvOS, project: project, buildPath: finalBuildDirectory))
+                try allFrameworks.append(contentsOf: buildScheme(scheme: tvOSScheme, sdk: .tvOSSim, project: project, buildPath: finalBuildDirectory))
             }
             
             if let macOSScheme = macOSScheme {
-                try frameworksArguments.append(contentsOf: buildScheme(scheme: macOSScheme, sdk: .macOS, project: project, name: name, buildPath: finalBuildDirectory))
+                try allFrameworks.append(contentsOf: buildScheme(scheme: macOSScheme, sdk: .macOS, project: project, buildPath: finalBuildDirectory))
             }
         } catch let error as XCFrameworkError {
             return .failure(error)
@@ -122,23 +122,64 @@ public class XCFrameworkBuilder {
         }
         
         print("Combining...")
-        //add output to final command
-        frameworksArguments.append("-output")
-        frameworksArguments.append(finalOutput)
-        if verbose {
-            print("xcodebuild \(frameworksArguments.joined(separator: " "))")
+        
+        //An archive command may produce multiple different frameworks, so we need to map them by their names and create an xcframework per generated framework
+        typealias OrganizedFrameworks = [String : [Framework]]
+        let organizedFrameworks = allFrameworks.reduce(OrganizedFrameworks(), { (result, framework) -> OrganizedFrameworks in
+            var result = result
+            var array: [Framework]
+            if let existingArray = result[framework.name] {
+                array = existingArray
+                array.append(framework)
+            } else {
+                array = [framework]
+            }
+            result[framework.name] = array
+            return result
+        })
+        
+        var overriddenName: String?
+        if organizedFrameworks.count == 1 {
+            overriddenName = name
         }
-        let result = shell.usr.bin.xcodebuild.dynamicallyCall(withArguments: frameworksArguments)
-        if !result.isSuccess {
-            return .failure(.buildError(result.stderr + "\nXCFramework Build Error From Running: 'xcodebuild \(frameworksArguments.joined(separator: " "))'"))
+        
+        for (frameworkName, frameworks) in organizedFrameworks {
+            
+            let name = overriddenName ?? frameworkName
+            
+            let finalOutput = finalOutputDirectory + name + ".xcframework"
+            try? Folder(path: finalOutput).delete()
+
+            print("Creating \(name).xcframework")
+            
+            var arguments = ["-create-xcframework"]
+            for framework in frameworks {
+                arguments.append(contentsOf: ["-framework", framework.path])
+            }
+            arguments.append("-output")
+            arguments.append(finalOutput)
+            if verbose {
+                print("xcodebuild \(arguments.joined(separator: " "))")
+            }
+            let result = shell.usr.bin.xcodebuild.dynamicallyCall(withArguments: arguments)
+            if !result.isSuccess {
+                return .failure(.buildError(result.stderr + "\nXCFramework Build Error From Running: 'xcodebuild \(arguments.joined(separator: " "))'"))
+            }
+            print("Created \(name).xcframework")
         }
-        print("Success. \(finalOutput)")
+        
+        if self.keepArchives {
+            print("Keeoing generated archives.")
+        } else {
+            print("Cleaning up...")
+            try? Folder(path: buildDirectory).delete()
+        }
+        
         return .success(())
     }
     
-    private func buildScheme(scheme: String, sdk: SDK, project: String, name: String, buildPath: String) throws -> [String] {
+    private func buildScheme(scheme: String, sdk: SDK, project: String, buildPath: String) throws -> [Framework] {
         print("Building scheme \(scheme) for \(sdk.rawValue)...")
-        var frameworkArguments = [String]()
         //path for each scheme's archive
         let archivePath = buildPath + "\(scheme)-\(sdk.rawValue).xcarchive"
         //array of arguments for the archive of each framework
@@ -152,14 +193,23 @@ public class XCFrameworkBuilder {
             print("   xcodebuild \(archiveArguments.joined(separator: " "))")
         }
         let result = shell.usr.bin.xcodebuild.dynamicallyCall(withArguments: archiveArguments)
-        if !result.isSuccess {
+        if !result.isSuccess || !result.stderr.isEmpty {
             let errorMessage = result.stderr + "\nArchive Error From Running: 'xcodebuild \(archiveArguments.joined(separator: " "))'"
             throw XCFrameworkError.buildError(errorMessage)
         }
-        //add this framework to the list for the final output command
-        frameworkArguments.append("-framework")
-        frameworkArguments.append(archivePath + "/Products/Library/Frameworks/\(name).framework")
-        return frameworkArguments
+        
+        var frameworks = [Framework]()
+        let generatedFrameworksPath = archivePath + "/Products/Library/Frameworks/"
+        do {
+            let generatedFrameworksFolder = try Folder(path: generatedFrameworksPath)
+            for subfolder in generatedFrameworksFolder.subfolders {
+                if subfolder.name.hasSuffix(Framework.extension) {
+                    frameworks.append(Framework(path: subfolder.path, name: subfolder.nameExcludingExtension, archs: [sdk.rawValue], temporary: true))
+                }
+            }
+        } catch let error {
+            throw XCFrameworkError.buildError(error.localizedDescription)
+        }
+        return frameworks
     }
-    
 }

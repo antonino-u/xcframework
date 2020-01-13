@@ -11,9 +11,7 @@ import Shell
 import XCFrameworkKit
 
 struct AssembleCommand: CommandProtocol {
-    
-    static let frameworkSuffix = ".framework"
-    
+        
     // MARK: - CommandProtocol
     
     var verb = "assemble"
@@ -40,9 +38,9 @@ struct AssembleCommand: CommandProtocol {
     
     func run(_ options: Options) -> Result<(), CommandantError<()>> {
         
-        var sanitizedFrameworks = options.frameworks?.components(separatedBy: "\(Self.frameworkSuffix) ")
+        var sanitizedFrameworks = options.frameworks?.components(separatedBy: "\(Framework.extension) ")
         if sanitizedFrameworks?.count ?? 0 > 1 {
-            sanitizedFrameworks = sanitizedFrameworks?.map { !$0.hasSuffix(Self.frameworkSuffix) ? $0+Self.frameworkSuffix : $0 }
+            sanitizedFrameworks = sanitizedFrameworks?.map { !$0.hasSuffix(Framework.extension) ? $0+Framework.extension : $0 }
         }
         
         var builder = XCFrameworkAssembler.init(name: options.name, outputDirectory: options.outputDirectory, frameworkPaths: sanitizedFrameworks)
