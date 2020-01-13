@@ -171,7 +171,7 @@ public class XCFrameworkBuilder {
         }
         
         if self.keepArchives {
-            print("Keeoing generated archives.")
+            print("Keeping generated archives.")
         } else {
             print("Cleaning up...")
             try? Folder(path: buildDirectory).delete()
@@ -201,7 +201,7 @@ public class XCFrameworkBuilder {
         }
         
         var frameworks = [Framework]()
-        let generatedFrameworksPath = archivePath + "/" + XCFrameworkBuilder.archiveInstallPath
+        let generatedFrameworksPath = archivePath + "/Products/" + XCFrameworkBuilder.archiveInstallPath
         do {
             let generatedFrameworksFolder = try Folder(path: generatedFrameworksPath)
             for subfolder in generatedFrameworksFolder.subfolders {
