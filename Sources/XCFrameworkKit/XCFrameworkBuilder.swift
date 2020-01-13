@@ -95,27 +95,27 @@ public class XCFrameworkBuilder {
         //final xcframework location
         let finalOutputDirectory = outputDirectory.hasSuffix("/") ? outputDirectory : outputDirectory + "/"
         
-        var allFrameworks = [Framework]()
+        var archives = [Archive]()
         
         //try all supported SDKs
         do {
             if let watchOSScheme = watchOSScheme {
-                try allFrameworks.append(contentsOf: buildScheme(scheme: watchOSScheme, sdk: .watchOS, project: project, buildPath: finalBuildDirectory))
-                try allFrameworks.append(contentsOf: buildScheme(scheme: watchOSScheme, sdk: .watchOSSim, project: project, buildPath: finalBuildDirectory))
+                try archives.append(buildScheme(scheme: watchOSScheme, sdk: .watchOS, project: project, buildPath: finalBuildDirectory))
+                try archives.append(buildScheme(scheme: watchOSScheme, sdk: .watchOSSim, project: project, buildPath: finalBuildDirectory))
             }
             
             if let iOSScheme = iOSScheme {
-                try allFrameworks.append(contentsOf: buildScheme(scheme: iOSScheme, sdk: .iOS, project: project, buildPath: finalBuildDirectory))
-                try allFrameworks.append(contentsOf: buildScheme(scheme: iOSScheme, sdk: .iOSSim, project: project, buildPath: finalBuildDirectory))
+                try archives.append(buildScheme(scheme: iOSScheme, sdk: .iOS, project: project, buildPath: finalBuildDirectory))
+                try archives.append(buildScheme(scheme: iOSScheme, sdk: .iOSSim, project: project, buildPath: finalBuildDirectory))
             }
             
             if let tvOSScheme = tvOSScheme {
-                try allFrameworks.append(contentsOf: buildScheme(scheme: tvOSScheme, sdk: .tvOS, project: project, buildPath: finalBuildDirectory))
-                try allFrameworks.append(contentsOf: buildScheme(scheme: tvOSScheme, sdk: .tvOSSim, project: project, buildPath: finalBuildDirectory))
+                try archives.append(buildScheme(scheme: tvOSScheme, sdk: .tvOS, project: project, buildPath: finalBuildDirectory))
+                try archives.append(buildScheme(scheme: tvOSScheme, sdk: .tvOSSim, project: project, buildPath: finalBuildDirectory))
             }
             
             if let macOSScheme = macOSScheme {
-                try allFrameworks.append(contentsOf: buildScheme(scheme: macOSScheme, sdk: .macOS, project: project, buildPath: finalBuildDirectory))
+                try archives.append(buildScheme(scheme: macOSScheme, sdk: .macOS, project: project, buildPath: finalBuildDirectory))
             }
         } catch let error as XCFrameworkError {
             return .failure(error)
@@ -126,6 +126,7 @@ public class XCFrameworkBuilder {
         print("Combining...")
         
         //An archive command may produce multiple different frameworks, so we need to map them by their names and create an xcframework per generated framework
+        let allFrameworks = archives.flatMap({ $0.frameworks })
         typealias OrganizedFrameworks = [String : [Framework]]
         let organizedFrameworks = allFrameworks.reduce(OrganizedFrameworks(), { (result, framework) -> OrganizedFrameworks in
             var result = result
@@ -180,7 +181,7 @@ public class XCFrameworkBuilder {
         return .success(())
     }
     
-    private func buildScheme(scheme: String, sdk: SDK, project: String, buildPath: String) throws -> [Framework] {
+    private func buildScheme(scheme: String, sdk: SDK, project: String, buildPath: String) throws -> Archive {
         print("Building scheme \(scheme) for \(sdk.rawValue)...")
         //path for each scheme's archive
         let archivePath = buildPath + "\(scheme)-\(sdk.rawValue).xcarchive"
@@ -212,6 +213,6 @@ public class XCFrameworkBuilder {
         } catch let error {
             throw XCFrameworkError.buildError(error.localizedDescription)
         }
-        return frameworks
+        return Archive(path: archivePath, frameworks: frameworks)
     }
 }
