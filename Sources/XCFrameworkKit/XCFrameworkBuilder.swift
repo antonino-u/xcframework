@@ -157,10 +157,10 @@ public class XCFrameworkBuilder {
             
             var arguments = ["-create-xcframework"]
             for framework in frameworks {
-                arguments.append(contentsOf: ["-framework", framework.path])
+                arguments.append(contentsOf: ["-framework", "\"" + framework.path + "\""])
             }
             arguments.append("-output")
-            arguments.append(finalOutput)
+            arguments.append("\"" + finalOutput + "\"")
             if verbose {
                 print("xcodebuild \(arguments.joined(separator: " "))")
             }
@@ -191,7 +191,7 @@ public class XCFrameworkBuilder {
         if let compilerArguments = compilerArguments {
             archiveArguments.append(contentsOf: compilerArguments)
         }
-        archiveArguments.append(contentsOf: ["-archivePath", archivePath, "-sdk", sdk.rawValue])
+        archiveArguments.append(contentsOf: ["-archivePath", "\"" + archivePath + "\"", "-sdk", sdk.rawValue])
         if verbose {
             print("   xcodebuild \(archiveArguments.joined(separator: " "))")
         }
