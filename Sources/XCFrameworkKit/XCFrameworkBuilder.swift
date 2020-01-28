@@ -196,7 +196,7 @@ public class XCFrameworkBuilder {
             print("   xcodebuild \(archiveArguments.joined(separator: " "))")
         }
         let result = shell.usr.bin.xcodebuild.dynamicallyCall(withArguments: archiveArguments)
-        if !result.isSuccess || !result.stderr.isEmpty {
+        if !result.isSuccess {
             let errorMessage = result.stderr + "\nArchive Error From Running: 'xcodebuild \(archiveArguments.joined(separator: " "))'"
             throw XCFrameworkError.buildError(errorMessage)
         }

@@ -149,7 +149,7 @@ public struct XCFrameworkAssembler {
             }
         }
 
-        if !xcframeworkResult.isSuccess || !xcframeworkResult.stderr.isEmpty {
+        if !xcframeworkResult.isSuccess {
             return Result.failure(.other("xcframework creation failed. \nArguments: \(arguments.joined(separator: " "))\nError: \(xcframeworkResult.stderr)"))
         }
         
